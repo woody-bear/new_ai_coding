@@ -1,6 +1,12 @@
 /**
  * 공간 이용료 계산기
  * 호스트 수익과 게스트 결제금액을 실시간으로 계산합니다.
+ *
+ * 추가 비용 항목:
+ * - 시즌 요금 (기본/성수기/극성수기/핫타임/휴일/휴일전일)
+ * - 인당 가격 (인원 수에 따른 요금)
+ * - 추가 인원 비용 (기준 인원 초과 시)
+ * - 옵션 상품 (동적 추가)
  */
 
 // ===================================
@@ -10,7 +16,6 @@ const CONFIG = {
   PLATFORM_FEE_RATE: 0.1,  // 플랫폼 수수료율 10%
   VAT_RATE: 0.1,           // 부가세율 10%
   MIN_HOURS: 1,            // 최소 이용 시간
-  MAX_DISCOUNT: 100,       // 최대 할인율
   SEASON_RATES: {
     standard: { rate: 1.0, label: '기본' },
     peak: { rate: 1.2, label: '성수기' },
@@ -22,10 +27,16 @@ const CONFIG = {
 };
 
 // ===================================
+// 상태 관리
+// ===================================
+let optionItems = [];
+let optionIdCounter = 0;
+
+// ===================================
 // DOM 요소
 // ===================================
 const elements = {
-  // 기본 입력 필드
+  // 기본 정보 입력
   hourlyRate: document.getElementById('hourlyRate'),
   perPersonPrice: document.getElementById('perPersonPrice'),
   personCountGroup: document.getElementById('personCountGroup'),
@@ -45,13 +56,7 @@ const elements = {
   optionItemsContainer: document.getElementById('optionItemsContainer'),
   addOptionBtn: document.getElementById('addOptionBtn'),
 
-  // 기타 비용
-  cleaningFeeCheck: document.getElementById('cleaningFeeCheck'),
-  cleaningFee: document.getElementById('cleaningFee'),
-  cleaningFeeWrapper: document.getElementById('cleaningFeeWrapper'),
-  discountCheck: document.getElementById('discountCheck'),
-  discountRate: document.getElementById('discountRate'),
-  discountWrapper: document.getElementById('discountWrapper'),
+  // 기타 옵션
   vatIncluded: document.getElementById('vatIncluded'),
 
   // 결과 표시
@@ -67,10 +72,6 @@ const elements = {
   extraPersonAmount: document.getElementById('extraPersonAmount'),
   optionRow: document.getElementById('optionRow'),
   optionAmount: document.getElementById('optionAmount'),
-  cleaningRow: document.getElementById('cleaningRow'),
-  cleaningAmount: document.getElementById('cleaningAmount'),
-  discountRow: document.getElementById('discountRow'),
-  discountAmount: document.getElementById('discountAmount'),
   vatRow: document.getElementById('vatRow'),
   vatAmount: document.getElementById('vatAmount'),
   guestPayment: document.getElementById('guestPayment'),
@@ -85,253 +86,148 @@ const elements = {
   toast: document.getElementById('toast')
 };
 
-// 옵션 아이템 카운터
-let optionCounter = 0;
-
 // ===================================
 // 유틸리티 함수
 // ===================================
 
-/**
- * 숫자를 천단위 콤마가 포함된 문자열로 변환
- */
 const formatNumber = (num) => {
   return new Intl.NumberFormat('ko-KR').format(Math.round(num));
 };
 
-/**
- * 천단위 콤마가 포함된 문자열을 숫자로 변환
- */
 const parseNumber = (str) => {
   if (!str) return 0;
   const num = parseInt(str.replace(/,/g, ''), 10);
   return isNaN(num) ? 0 : num;
 };
 
-/**
- * 금액 문자열 생성 (원 단위)
- */
 const formatCurrency = (num) => {
   return formatNumber(num) + '원';
-};
-
-// ===================================
-// 옵션 아이템 관리
-// ===================================
-
-/**
- * 옵션 아이템 추가
- */
-const addOptionItem = () => {
-  optionCounter++;
-  const itemId = `option-${optionCounter}`;
-
-  const itemHtml = `
-    <div class="option-item" id="${itemId}">
-      <input type="text" class="option-item__name" placeholder="옵션명" data-field="name">
-      <input type="text" class="option-item__price" placeholder="가격" inputmode="numeric" data-field="price">
-      <input type="number" class="option-item__qty" value="1" min="1" data-field="qty">
-      <button type="button" class="option-item__remove" data-item-id="${itemId}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-  `;
-
-  elements.optionItemsContainer.insertAdjacentHTML('beforeend', itemHtml);
-
-  // 이벤트 리스너 추가
-  const newItem = document.getElementById(itemId);
-  newItem.querySelector('[data-field="price"]').addEventListener('input', handleNumberInput);
-  newItem.querySelector('[data-field="qty"]').addEventListener('input', calculate);
-  newItem.querySelector('.option-item__remove').addEventListener('click', (e) => {
-    removeOptionItem(e.target.closest('.option-item__remove').dataset.itemId);
-  });
-
-  calculate();
-};
-
-/**
- * 옵션 아이템 삭제
- */
-const removeOptionItem = (itemId) => {
-  const item = document.getElementById(itemId);
-  if (item) {
-    item.remove();
-    calculate();
-  }
-};
-
-/**
- * 모든 옵션 아이템의 총합 계산
- */
-const calculateOptionsTotal = () => {
-  let total = 0;
-  const optionItems = elements.optionItemsContainer.querySelectorAll('.option-item');
-
-  optionItems.forEach(item => {
-    const price = parseNumber(item.querySelector('[data-field="price"]').value);
-    const qty = parseInt(item.querySelector('[data-field="qty"]').value, 10) || 1;
-    total += price * qty;
-  });
-
-  return total;
 };
 
 // ===================================
 // 계산 함수
 // ===================================
 
-/**
- * 전체 계산 실행
- */
 const calculate = () => {
-  // 기본 입력값 가져오기
+  // 기본 입력값
   const hourlyRate = parseNumber(elements.hourlyRate.value);
   const hours = parseInt(elements.hours.value, 10) || CONFIG.MIN_HOURS;
-  const isPerPersonPrice = elements.perPersonPrice.checked;
-  const personCount = isPerPersonPrice ? (parseInt(elements.personCount.value, 10) || 1) : 1;
+  const perPersonEnabled = elements.perPersonPrice.checked;
+  const personCount = perPersonEnabled ? (parseInt(elements.personCount.value, 10) || 1) : 1;
   const seasonType = elements.seasonType.value;
-  const seasonInfo = CONFIG.SEASON_RATES[seasonType] || CONFIG.SEASON_RATES.standard;
+  const seasonRate = CONFIG.SEASON_RATES[seasonType]?.rate || 1.0;
+  const seasonLabel = CONFIG.SEASON_RATES[seasonType]?.label || '기본';
 
   // 추가 인원 비용
   const extraPersonEnabled = elements.extraPersonCheck.checked;
-  const basePersonCount = parseInt(elements.basePersonCount.value, 10) || 2;
-  const extraPersonCount = parseInt(elements.extraPersonCount.value, 10) || 0;
-  const extraPersonPrice = parseNumber(elements.extraPersonPrice.value);
+  const extraPersonCnt = extraPersonEnabled ? (parseInt(elements.extraPersonCount.value, 10) || 0) : 0;
+  const extraPersonPriceValue = extraPersonEnabled ? parseNumber(elements.extraPersonPrice.value) : 0;
   const extraPersonPerHour = elements.extraPersonPerHour.checked;
 
-  // 기타 비용
-  const cleaningFeeEnabled = elements.cleaningFeeCheck.checked;
-  const cleaningFee = cleaningFeeEnabled ? parseNumber(elements.cleaningFee.value) : 0;
-  const discountEnabled = elements.discountCheck.checked;
-  const discountRate = discountEnabled ? Math.min(parseFloat(elements.discountRate.value) || 0, CONFIG.MAX_DISCOUNT) : 0;
+  // 옵션 상품 비용
+  let optionTotalPrice = 0;
+  optionItems.forEach(item => {
+    const price = parseNumber(item.priceInput.value) || 0;
+    const qty = parseInt(item.qtyInput.value, 10) || 1;
+    optionTotalPrice += price * qty;
+  });
+
+  // 부가세
   const vatIncluded = elements.vatIncluded.checked;
 
-  // 기본 요금 계산
-  let baseAmount = hourlyRate * hours;
+  // 계산
+  // 1. 기본 요금 (시간당 요금 × 시간)
+  const baseAmount = hourlyRate * hours;
 
-  // 인당 가격인 경우 인원수 적용
-  let perPersonTotal = 0;
-  if (isPerPersonPrice) {
-    perPersonTotal = baseAmount * personCount;
-    baseAmount = hourlyRate * hours; // 기본 요금은 1인 기준
-  }
+  // 2. 시즌 할증 금액
+  const seasonAdjustment = baseAmount * (seasonRate - 1);
+  const afterSeason = baseAmount + seasonAdjustment;
 
-  // 시즌 할증 계산
-  const priceBeforeSeason = isPerPersonPrice ? perPersonTotal : baseAmount;
-  const seasonMultiplier = seasonInfo.rate - 1;
-  const seasonAmount = priceBeforeSeason * seasonMultiplier;
-  const afterSeason = priceBeforeSeason + seasonAmount;
+  // 3. 인당 요금 (인당 가격이면 인원 수를 곱함)
+  const perPersonMultiplier = perPersonEnabled ? personCount : 1;
+  const perPersonAdjustment = perPersonEnabled ? afterSeason * (perPersonMultiplier - 1) : 0;
+  const afterPerPerson = afterSeason * perPersonMultiplier;
 
-  // 추가 인원 비용 계산
-  let extraPersonAmount = 0;
-  if (extraPersonEnabled && extraPersonCount > 0) {
+  // 4. 추가 인원 비용
+  let extraPersonCost = 0;
+  if (extraPersonEnabled && extraPersonCnt > 0) {
     if (extraPersonPerHour) {
-      extraPersonAmount = extraPersonPrice * extraPersonCount * hours;
+      extraPersonCost = extraPersonPriceValue * extraPersonCnt * hours;
     } else {
-      extraPersonAmount = extraPersonPrice * extraPersonCount;
+      extraPersonCost = extraPersonPriceValue * extraPersonCnt;
     }
   }
 
-  // 옵션 상품 총액
-  const optionTotal = calculateOptionsTotal();
+  // 5. 소계 (기본요금 + 시즌 + 인당 + 추가인원 + 옵션)
+  const subtotal = afterPerPerson + extraPersonCost + optionTotalPrice;
 
-  // 소계 (시즌 적용 후 + 추가인원 + 옵션 + 청소비)
-  const subtotal = afterSeason + extraPersonAmount + optionTotal + cleaningFee;
+  // 6. 부가세
+  const vatAmount = vatIncluded ? subtotal * CONFIG.VAT_RATE : 0;
+  const guestPayment = subtotal + vatAmount;
 
-  // 할인 계산
-  const discountAmount = subtotal * (discountRate / 100);
-  const afterDiscount = subtotal - discountAmount;
-
-  // 부가세 계산
-  const vatAmount = vatIncluded ? afterDiscount * CONFIG.VAT_RATE : 0;
-
-  // 게스트 결제금액
-  const guestPayment = afterDiscount + vatAmount;
-
-  // 플랫폼 수수료 및 호스트 정산액
+  // 7. 플랫폼 수수료 및 호스트 정산액
   const platformFee = guestPayment * CONFIG.PLATFORM_FEE_RATE;
   const hostRevenue = guestPayment - platformFee;
 
   // 결과 표시
   updateResults({
-    baseAmount: isPerPersonPrice ? hourlyRate * hours : baseAmount,
-    isPerPersonPrice,
+    baseAmount,
+    seasonAdjustment,
+    seasonRate,
+    seasonLabel,
+    perPersonEnabled,
+    perPersonAdjustment,
     personCount,
-    perPersonTotal,
-    seasonInfo,
-    seasonAmount,
     extraPersonEnabled,
-    extraPersonCount,
-    extraPersonAmount,
-    extraPersonPerHour,
-    optionTotal,
-    cleaningFee,
-    cleaningFeeEnabled,
-    discountAmount,
-    discountEnabled,
+    extraPersonCost,
+    extraPersonCnt,
+    optionTotalPrice,
     vatAmount,
     vatIncluded,
     guestPayment,
     platformFee,
-    hostRevenue,
-    hours
+    hostRevenue
   });
 };
 
-/**
- * 결과 DOM 업데이트
- */
 const updateResults = (results) => {
   // 기본 요금
   elements.baseAmount.textContent = formatCurrency(results.baseAmount);
 
-  // 인원 요금 (인당 가격인 경우)
-  if (results.isPerPersonPrice && results.personCount > 1) {
-    elements.perPersonRow.style.display = 'flex';
-    elements.perPersonLabel.textContent = `인원 요금 (${results.personCount}명)`;
-    elements.perPersonAmount.textContent = formatCurrency(results.perPersonTotal);
-  } else {
-    elements.perPersonRow.style.display = 'none';
-  }
-
   // 시즌 할증
-  if (results.seasonInfo.rate > 1) {
+  if (results.seasonRate > 1) {
     elements.seasonRow.style.display = 'flex';
-    elements.seasonLabel.textContent = `${results.seasonInfo.label} 할증 (+${Math.round((results.seasonInfo.rate - 1) * 100)}%)`;
-    elements.seasonAmount.textContent = '+' + formatCurrency(results.seasonAmount);
+    elements.seasonLabel.textContent = results.seasonLabel + ' 할증 (' + Math.round((results.seasonRate - 1) * 100) + '%)';
+    elements.seasonAmount.textContent = '+' + formatCurrency(results.seasonAdjustment);
   } else {
     elements.seasonRow.style.display = 'none';
   }
 
+  // 인당 요금
+  if (results.perPersonEnabled && results.personCount > 1) {
+    elements.perPersonRow.style.display = 'flex';
+    elements.perPersonLabel.textContent = '인원 요금 (' + results.personCount + '명)';
+    elements.perPersonAmount.textContent = '+' + formatCurrency(results.perPersonAdjustment);
+  } else {
+    elements.perPersonRow.style.display = 'none';
+  }
+
   // 추가 인원 비용
-  if (results.extraPersonEnabled && results.extraPersonAmount > 0) {
+  if (results.extraPersonEnabled && results.extraPersonCost > 0) {
     elements.extraPersonRow.style.display = 'flex';
-    const timeLabel = results.extraPersonPerHour ? ` x ${results.hours}시간` : '';
-    elements.extraPersonLabel.textContent = `추가 인원 (${results.extraPersonCount}명${timeLabel})`;
-    elements.extraPersonAmount.textContent = '+' + formatCurrency(results.extraPersonAmount);
+    elements.extraPersonLabel.textContent = '추가 인원 (' + results.extraPersonCnt + '명)';
+    elements.extraPersonAmount.textContent = '+' + formatCurrency(results.extraPersonCost);
   } else {
     elements.extraPersonRow.style.display = 'none';
   }
 
   // 옵션 상품
-  if (results.optionTotal > 0) {
+  if (results.optionTotalPrice > 0) {
     elements.optionRow.style.display = 'flex';
-    elements.optionAmount.textContent = '+' + formatCurrency(results.optionTotal);
+    elements.optionAmount.textContent = '+' + formatCurrency(results.optionTotalPrice);
   } else {
     elements.optionRow.style.display = 'none';
   }
-
-  // 청소비
-  elements.cleaningRow.style.display = results.cleaningFeeEnabled ? 'flex' : 'none';
-  elements.cleaningAmount.textContent = '+' + formatCurrency(results.cleaningFee);
-
-  // 할인
-  elements.discountRow.style.display = results.discountEnabled && results.discountAmount > 0 ? 'flex' : 'none';
-  elements.discountAmount.textContent = '-' + formatCurrency(results.discountAmount);
 
   // 부가세
   elements.vatRow.style.display = results.vatIncluded ? 'flex' : 'none';
@@ -344,24 +240,71 @@ const updateResults = (results) => {
 };
 
 // ===================================
+// 옵션 상품 관리
+// ===================================
+
+const createOptionItem = () => {
+  const id = ++optionIdCounter;
+  const item = document.createElement('div');
+  item.className = 'option-item';
+  item.dataset.id = id;
+  item.innerHTML = '<input type="text" class="option-item__name" placeholder="옵션명" />' +
+    '<input type="text" class="option-item__price" placeholder="가격" inputmode="numeric" />' +
+    '<input type="number" class="option-item__qty" value="1" min="1" />' +
+    '<button type="button" class="option-item__remove">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+    '<line x1="18" y1="6" x2="6" y2="18"></line>' +
+    '<line x1="6" y1="6" x2="18" y2="18"></line>' +
+    '</svg></button>';
+
+  const nameInput = item.querySelector('.option-item__name');
+  const priceInput = item.querySelector('.option-item__price');
+  const qtyInput = item.querySelector('.option-item__qty');
+  const removeBtn = item.querySelector('.option-item__remove');
+
+  // 가격 입력 시 천단위 콤마
+  priceInput.addEventListener('input', (e) => {
+    const num = parseNumber(e.target.value);
+    e.target.value = num > 0 ? formatNumber(num) : '';
+    calculate();
+  });
+
+  // 수량 변경 시 계산
+  qtyInput.addEventListener('input', calculate);
+
+  // 삭제 버튼
+  removeBtn.addEventListener('click', () => {
+    const index = optionItems.findIndex(opt => opt.id === id);
+    if (index > -1) {
+      optionItems.splice(index, 1);
+    }
+    item.remove();
+    calculate();
+  });
+
+  elements.optionItemsContainer.appendChild(item);
+
+  const optionData = { id, element: item, nameInput, priceInput, qtyInput };
+  optionItems.push(optionData);
+
+  nameInput.focus();
+  return optionData;
+};
+
+// ===================================
 // 입력 필드 이벤트 핸들러
 // ===================================
 
-/**
- * 숫자 입력 필드에 천단위 콤마 적용
- */
 const handleNumberInput = (e) => {
   const input = e.target;
   const cursorPos = input.selectionStart;
   const oldValue = input.value;
   const oldLength = oldValue.length;
 
-  // 숫자만 추출하고 포맷팅
   const num = parseNumber(oldValue);
   const formatted = num > 0 ? formatNumber(num) : '';
   input.value = formatted;
 
-  // 커서 위치 조정
   const newLength = formatted.length;
   const diff = newLength - oldLength;
   const newPos = Math.max(0, cursorPos + diff);
@@ -370,58 +313,49 @@ const handleNumberInput = (e) => {
   calculate();
 };
 
-/**
- * 체크박스 토글 핸들러
- */
-const handleCheckboxToggle = (checkbox, inputElement) => {
-  const enabled = checkbox.checked;
-  inputElement.disabled = !enabled;
-
-  if (!enabled) {
-    inputElement.value = '';
-  } else {
-    inputElement.focus();
-  }
-
-  calculate();
-};
-
 // ===================================
 // 액션 버튼 핸들러
 // ===================================
 
-/**
- * 결과를 클립보드에 복사
- */
 const copyToClipboard = async () => {
   const hourlyRate = parseNumber(elements.hourlyRate.value);
   const hours = parseInt(elements.hours.value, 10) || CONFIG.MIN_HOURS;
+  const seasonType = elements.seasonType.value;
+  const seasonLabel = CONFIG.SEASON_RATES[seasonType]?.label || '기본';
   const guestPayment = elements.guestPayment.textContent;
   const platformFee = elements.platformFee.textContent;
   const hostRevenue = elements.hostRevenue.textContent;
 
-  const isPerPersonPrice = elements.perPersonPrice.checked;
-  const personCount = isPerPersonPrice ? (parseInt(elements.personCount.value, 10) || 1) : 1;
-  const seasonType = elements.seasonType.value;
-  const seasonInfo = CONFIG.SEASON_RATES[seasonType];
+  let text = '[공간 이용료 계산 결과]\n' +
+    '시간당 요금: ' + formatCurrency(hourlyRate) + '\n' +
+    '이용 시간: ' + hours + '시간\n' +
+    '시즌: ' + seasonLabel;
 
-  let text = `[공간 이용료 계산 결과]\n`;
-  text += `시간당 요금: ${formatCurrency(hourlyRate)}`;
-  if (isPerPersonPrice) text += ` (인당)`;
-  text += `\n`;
-  text += `이용 시간: ${hours}시간\n`;
-  if (isPerPersonPrice) text += `이용 인원: ${personCount}명\n`;
-  if (seasonInfo.rate > 1) text += `시즌: ${seasonInfo.label} (+${Math.round((seasonInfo.rate - 1) * 100)}%)\n`;
-  text += `────────────────\n`;
-  text += `게스트 결제금액: ${guestPayment}\n`;
-  text += `플랫폼 수수료: ${platformFee}\n`;
-  text += `호스트 정산액: ${hostRevenue}`;
+  if (elements.perPersonPrice.checked) {
+    const personCount = parseInt(elements.personCount.value, 10) || 1;
+    text += '\n인원: ' + personCount + '명 (인당 가격)';
+  }
+
+  if (elements.extraPersonCheck.checked) {
+    const extraPersonCnt = parseInt(elements.extraPersonCount.value, 10) || 0;
+    if (extraPersonCnt > 0) {
+      text += '\n추가 인원: ' + extraPersonCnt + '명';
+    }
+  }
+
+  if (optionItems.length > 0) {
+    text += '\n옵션 상품: ' + optionItems.length + '개';
+  }
+
+  text += '\n────────────────\n' +
+    '게스트 결제금액: ' + guestPayment + '\n' +
+    '플랫폼 수수료: ' + platformFee + '\n' +
+    '호스트 정산액: ' + hostRevenue;
 
   try {
     await navigator.clipboard.writeText(text);
     showToast('결과가 복사되었습니다');
   } catch (err) {
-    // 폴백: execCommand 사용
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
@@ -434,10 +368,8 @@ const copyToClipboard = async () => {
   }
 };
 
-/**
- * 폼 초기화
- */
 const resetForm = () => {
+  // 기본 정보
   elements.hourlyRate.value = '';
   elements.perPersonPrice.checked = false;
   elements.personCountGroup.style.display = 'none';
@@ -445,6 +377,7 @@ const resetForm = () => {
   elements.hours.value = '1';
   elements.seasonType.value = 'standard';
 
+  // 추가 인원
   elements.extraPersonCheck.checked = false;
   elements.extraPersonFields.style.display = 'none';
   elements.basePersonCount.value = '2';
@@ -452,24 +385,17 @@ const resetForm = () => {
   elements.extraPersonPrice.value = '';
   elements.extraPersonPerHour.checked = false;
 
-  // 옵션 아이템 모두 삭제
+  // 옵션 상품
+  optionItems = [];
   elements.optionItemsContainer.innerHTML = '';
 
-  elements.cleaningFeeCheck.checked = false;
-  elements.cleaningFee.value = '';
-  elements.cleaningFee.disabled = true;
-  elements.discountCheck.checked = false;
-  elements.discountRate.value = '';
-  elements.discountRate.disabled = true;
+  // 기타 옵션
   elements.vatIncluded.checked = false;
 
   calculate();
   showToast('초기화되었습니다');
 };
 
-/**
- * 토스트 메시지 표시
- */
 const showToast = (message, duration = 2000) => {
   elements.toast.textContent = message;
   elements.toast.classList.add('toast--visible');
@@ -483,21 +409,25 @@ const showToast = (message, duration = 2000) => {
 // 이벤트 리스너 등록
 // ===================================
 const initEventListeners = () => {
-  // 숫자 입력 필드 (천단위 콤마 적용)
+  // 기본 정보
   elements.hourlyRate.addEventListener('input', handleNumberInput);
-  elements.cleaningFee.addEventListener('input', handleNumberInput);
-  elements.extraPersonPrice.addEventListener('input', handleNumberInput);
 
-  // 인당 가격 토글
   elements.perPersonPrice.addEventListener('change', () => {
     elements.personCountGroup.style.display = elements.perPersonPrice.checked ? 'block' : 'none';
+    if (elements.perPersonPrice.checked) {
+      elements.personCount.focus();
+    }
     calculate();
   });
 
-  // 인원수 입력
-  elements.personCount.addEventListener('input', calculate);
+  elements.personCount.addEventListener('input', () => {
+    const value = parseInt(elements.personCount.value, 10);
+    if (value < 1) {
+      elements.personCount.value = 1;
+    }
+    calculate();
+  });
 
-  // 시간 입력
   elements.hours.addEventListener('input', () => {
     const value = parseInt(elements.hours.value, 10);
     if (value < CONFIG.MIN_HOURS) {
@@ -506,49 +436,30 @@ const initEventListeners = () => {
     calculate();
   });
 
-  // 시즌 선택
   elements.seasonType.addEventListener('change', calculate);
 
-  // 추가 인원 비용 토글
+  // 추가 인원 비용
   elements.extraPersonCheck.addEventListener('change', () => {
     elements.extraPersonFields.style.display = elements.extraPersonCheck.checked ? 'block' : 'none';
     calculate();
   });
 
-  // 추가 인원 필드들
   elements.basePersonCount.addEventListener('input', calculate);
   elements.extraPersonCount.addEventListener('input', calculate);
+  elements.extraPersonPrice.addEventListener('input', handleNumberInput);
   elements.extraPersonPerHour.addEventListener('change', calculate);
 
-  // 옵션 추가 버튼
-  elements.addOptionBtn.addEventListener('click', addOptionItem);
+  // 옵션 상품
+  elements.addOptionBtn.addEventListener('click', createOptionItem);
 
-  // 할인율 입력
-  elements.discountRate.addEventListener('input', () => {
-    const value = parseFloat(elements.discountRate.value);
-    if (value > CONFIG.MAX_DISCOUNT) {
-      elements.discountRate.value = CONFIG.MAX_DISCOUNT;
-    }
-    calculate();
-  });
-
-  // 체크박스 토글
-  elements.cleaningFeeCheck.addEventListener('change', () => {
-    handleCheckboxToggle(elements.cleaningFeeCheck, elements.cleaningFee);
-  });
-
-  elements.discountCheck.addEventListener('change', () => {
-    handleCheckboxToggle(elements.discountCheck, elements.discountRate);
-  });
-
-  // 부가세 토글
+  // 기타 옵션
   elements.vatIncluded.addEventListener('change', calculate);
 
   // 버튼
   elements.copyBtn.addEventListener('click', copyToClipboard);
   elements.resetBtn.addEventListener('click', resetForm);
 
-  // 숫자 필드에서 Enter 키 방지 (폼 제출 방지)
+  // 폼 제출 방지
   document.getElementById('calculatorForm').addEventListener('submit', (e) => {
     e.preventDefault();
   });
@@ -559,8 +470,7 @@ const initEventListeners = () => {
 // ===================================
 const init = () => {
   initEventListeners();
-  calculate(); // 초기 계산
+  calculate();
 };
 
-// DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', init);
