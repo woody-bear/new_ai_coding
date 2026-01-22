@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>공간 이용료 계산기 - Space Tools</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 공통 네비게이션 헤더 -->
+    <header class="nav-header">
+      <div class="nav-header__container">
+        <a href="index.html" class="nav-header__logo">Space Tools</a>
+        <nav class="nav-header__nav">
+          <a href="calculator.html" class="nav-header__link nav-header__link--active">
+            <span class="nav-header__icon">🧮</span>
+            <span class="nav-header__text">이용료 계산기</span>
+          </a>
+          <a href="mood-board.html" class="nav-header__link">
+            <span class="nav-header__icon">💫</span>
+            <span class="nav-header__text">무드 체크</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 계산기 메인 -->
+    <main class="calculator">
+      <header class="calculator__header">
+        <h1 class="calculator__title">공간 이용료 계산기</h1>
+        <p class="calculator__subtitle">호스트 수익과 게스트 결제금액을 빠르게 계산하세요</p>
+      </header>
+
+      <form class="calculator__form" id="calculatorForm">
+        <!-- 기본 입력 섹션 -->
+        <section class="form-section">
+          <h2 class="form-section__title">기본 정보</h2>
+
+          <div class="form-group">
+            <label class="form-group__label" for="hourlyRate">시간당 요금</label>
+            <div class="form-group__input-wrapper">
+              <input
+                type="text"
+                id="hourlyRate"
+                class="form-group__input"
+                inputmode="numeric"
+                placeholder="0"
+                autocomplete="off"
+              >
+              <span class="form-group__unit">원</span>
+            </div>
+          </div>
+
+          <div class="form-group form-group--toggle">
+            <span class="toggle-label">인당 가격</span>
+            <label class="toggle">
+              <input type="checkbox" id="perPersonPrice" class="toggle__input">
+              <span class="toggle__slider"></span>
+            </label>
+          </div>
+
+          <div class="form-group" id="personCountGroup" style="display: none;">
+            <label class="form-group__label" for="personCount">이용 인원</label>
+            <div class="form-group__input-wrapper">
+              <input
+                type="number"
+                id="personCount"
+                class="form-group__input"
+                min="1"
+                value="1"
+                autocomplete="off"
+              >
+              <span class="form-group__unit">명</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-group__label" for="hours">이용 시간</label>
+            <div class="form-group__input-wrapper">
+              <input
+                type="number"
+                id="hours"
+                class="form-group__input"
+                min="1"
+                value="1"
+                autocomplete="off"
+              >
+              <span class="form-group__unit">시간</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-group__label" for="seasonType">시즌 요금</label>
+            <div class="form-group__select-wrapper">
+              <select id="seasonType" class="form-group__select">
+                <option value="standard" selected>기본 (100%)</option>
+                <option value="peak">성수기 (120%)</option>
+                <option value="highPeak">극성수기 (150%)</option>
+                <option value="hotTime">핫타임 (130%)</option>
+                <option value="holiday">휴일 (120%)</option>
+                <option value="holidayEve">휴일전일 (110%)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- 추가 인원 비용 섹션 -->
+        <section class="form-section form-section--extra">
+          <h2 class="form-section__title">추가 인원 비용</h2>
+
+          <div class="form-group form-group--checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" id="extraPersonCheck" class="checkbox-input">
+              <span class="checkbox-custom"></span>
+              <span class="checkbox-text">추가 인원 비용 적용</span>
+            </label>
+          </div>
+
+          <div id="extraPersonFields" style="display: none;">
+            <div class="form-group">
+              <label class="form-group__label" for="basePersonCount">기준 인원</label>
+              <div class="form-group__input-wrapper">
+                <input
+                  type="number"
+                  id="basePersonCount"
+                  class="form-group__input"
+                  min="1"
+                  value="2"
+                  autocomplete="off"
+                >
+                <span class="form-group__unit">명</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-group__label" for="extraPersonCount">추가 인원</label>
+              <div class="form-group__input-wrapper">
+                <input
+                  type="number"
+                  id="extraPersonCount"
+                  class="form-group__input"
+                  min="0"
+                  value="0"
+                  autocomplete="off"
+                >
+                <span class="form-group__unit">명</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-group__label" for="extraPersonPrice">인당 추가 비용</label>
+              <div class="form-group__input-wrapper">
+                <input
+                  type="text"
+                  id="extraPersonPrice"
+                  class="form-group__input"
+                  inputmode="numeric"
+                  placeholder="0"
+                  autocomplete="off"
+                >
+                <span class="form-group__unit">원</span>
+              </div>
+            </div>
+
+            <div class="form-group form-group--toggle">
+              <span class="toggle-label">시간당 추가 (시간 x 인원)</span>
+              <label class="toggle">
+                <input type="checkbox" id="extraPersonPerHour" class="toggle__input">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- 옵션 상품 섹션 -->
+        <section class="form-section form-section--options">
+          <h2 class="form-section__title">옵션 상품</h2>
+
+          <div id="optionItemsContainer">
+            <!-- 동적으로 옵션 아이템이 추가됨 -->
+          </div>
+
+          <button type="button" class="btn btn--add-option" id="addOptionBtn">
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            옵션 추가
+          </button>
+        </section>
+
+        <!-- 기타 옵션 섹션 -->
+        <section class="form-section form-section--misc">
+          <h2 class="form-section__title">기타 옵션</h2>
+
+          <div class="form-group form-group--toggle">
+            <span class="toggle-label">부가세 포함</span>
+            <label class="toggle">
+              <input type="checkbox" id="vatIncluded" class="toggle__input">
+              <span class="toggle__slider"></span>
+            </label>
+          </div>
+        </section>
+      </form>
+
+      <!-- 결과 섹션 -->
+      <section class="calculator__result" id="resultSection">
+        <h2 class="result__title">계산 결과</h2>
+
+        <div class="result__breakdown">
+          <div class="result-item result-item--sub">
+            <span class="result-item__label">기본 요금</span>
+            <span class="result-item__value" id="baseAmount">0원</span>
+          </div>
+          <div class="result-item result-item--sub" id="seasonRow" style="display: none;">
+            <span class="result-item__label" id="seasonLabel">시즌 할증</span>
+            <span class="result-item__value" id="seasonAmount">0원</span>
+          </div>
+          <div class="result-item result-item--sub" id="perPersonRow" style="display: none;">
+            <span class="result-item__label" id="perPersonLabel">인원 요금</span>
+            <span class="result-item__value" id="perPersonAmount">0원</span>
+          </div>
+          <div class="result-item result-item--sub" id="extraPersonRow" style="display: none;">
+            <span class="result-item__label" id="extraPersonLabel">추가 인원 비용</span>
+            <span class="result-item__value" id="extraPersonAmount">0원</span>
+          </div>
+          <div class="result-item result-item--sub" id="optionRow" style="display: none;">
+            <span class="result-item__label">옵션 상품</span>
+            <span class="result-item__value" id="optionAmount">0원</span>
+          </div>
+          <div class="result-item result-item--sub" id="vatRow" style="display: none;">
+            <span class="result-item__label">부가세 (10%)</span>
+            <span class="result-item__value" id="vatAmount">0원</span>
+          </div>
+        </div>
+
+        <div class="result__divider"></div>
+
+        <div class="result__summary">
+          <div class="result-item result-item--main">
+            <span class="result-item__label">게스트 결제금액</span>
+            <span class="result-item__value result-item__value--large" id="guestPayment">0원</span>
+          </div>
+          <div class="result-item">
+            <span class="result-item__label">플랫폼 수수료 (10%)</span>
+            <span class="result-item__value result-item__value--fee" id="platformFee">0원</span>
+          </div>
+          <div class="result-item result-item--highlight">
+            <span class="result-item__label">호스트 정산액</span>
+            <span class="result-item__value result-item__value--highlight" id="hostRevenue">0원</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 액션 버튼 -->
+      <div class="calculator__actions">
+        <button type="button" class="btn btn--copy" id="copyBtn">
+          <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          결과 복사
+        </button>
+        <button type="button" class="btn btn--reset" id="resetBtn">
+          <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          초기화
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- 토스트 메시지 -->
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <script src="js/calculator.js"></script>
+</body>
+</html>

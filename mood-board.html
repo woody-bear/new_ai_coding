@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>팀 무드 체크 보드 - Space Tools</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 공통 네비게이션 헤더 -->
+    <header class="nav-header">
+      <div class="nav-header__container">
+        <a href="index.html" class="nav-header__logo">Space Tools</a>
+        <nav class="nav-header__nav">
+          <a href="calculator.html" class="nav-header__link">
+            <span class="nav-header__icon">🧮</span>
+            <span class="nav-header__text">이용료 계산기</span>
+          </a>
+          <a href="mood-board.html" class="nav-header__link nav-header__link--active">
+            <span class="nav-header__icon">💫</span>
+            <span class="nav-header__text">무드 체크</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 무드 보드 메인 -->
+    <main class="mood-board">
+      <!-- 체크인 섹션 -->
+      <section class="mood-board__checkin">
+        <header class="checkin__header">
+          <h1 class="checkin__title">오늘 기분이 어때요?</h1>
+          <p class="checkin__subtitle">팀원들과 오늘의 컨디션을 공유해보세요</p>
+        </header>
+
+        <form class="checkin__form" id="checkinForm">
+          <!-- 무드 선택 -->
+          <div class="mood-selector" role="radiogroup" aria-label="오늘의 기분 선택">
+            <label class="mood-option">
+              <input type="radio" name="mood" value="1" class="mood-option__input">
+              <span class="mood-option__emoji" data-mood="1">😫</span>
+              <span class="mood-option__label">매우 나쁨</span>
+            </label>
+            <label class="mood-option">
+              <input type="radio" name="mood" value="2" class="mood-option__input">
+              <span class="mood-option__emoji" data-mood="2">😕</span>
+              <span class="mood-option__label">나쁨</span>
+            </label>
+            <label class="mood-option">
+              <input type="radio" name="mood" value="3" class="mood-option__input">
+              <span class="mood-option__emoji" data-mood="3">😐</span>
+              <span class="mood-option__label">보통</span>
+            </label>
+            <label class="mood-option">
+              <input type="radio" name="mood" value="4" class="mood-option__input">
+              <span class="mood-option__emoji" data-mood="4">🙂</span>
+              <span class="mood-option__label">좋음</span>
+            </label>
+            <label class="mood-option">
+              <input type="radio" name="mood" value="5" class="mood-option__input">
+              <span class="mood-option__emoji" data-mood="5">😄</span>
+              <span class="mood-option__label">매우 좋음</span>
+            </label>
+          </div>
+
+          <!-- 코멘트 입력 -->
+          <div class="comment-input">
+            <label for="comment" class="comment-input__label">한마디 남기기 (선택)</label>
+            <textarea
+              id="comment"
+              class="comment-input__textarea"
+              placeholder="오늘의 한마디를 남겨보세요..."
+              maxlength="100"
+              rows="2"
+            ></textarea>
+            <span class="comment-input__counter"><span id="commentLength">0</span>/100</span>
+          </div>
+
+          <!-- 체크인 버튼 -->
+          <button type="submit" class="btn btn--checkin" id="checkinBtn" disabled>
+            <span class="btn__text">체크인 완료!</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- 대시보드 섹션 -->
+      <section class="mood-board__dashboard">
+        <header class="dashboard__header">
+          <h2 class="dashboard__title">우리 팀 오늘</h2>
+        </header>
+
+        <!-- 통계 카드 -->
+        <div class="stats-grid">
+          <!-- 체크인 현황 -->
+          <div class="stat-card">
+            <span class="stat-card__label">체크인</span>
+            <div class="stat-card__value">
+              <span id="checkinCount">0</span>/<span id="teamTotal">15</span>명
+            </div>
+            <div class="stat-card__bar">
+              <div class="stat-card__bar-fill" id="checkinBar" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 평균 무드 -->
+          <div class="stat-card stat-card--mood">
+            <span class="stat-card__label">평균 무드</span>
+            <div class="stat-card__value stat-card__value--mood">
+              <span class="stat-card__emoji" id="averageEmoji">😐</span>
+              <span id="averageScore">0.0</span>점
+            </div>
+            <div class="mood-meter">
+              <div class="mood-meter__fill" id="moodMeter" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 최근 코멘트 -->
+        <div class="comments-section">
+          <h3 class="comments-section__title">최근 한마디</h3>
+          <ul class="comments-list" id="commentsList">
+            <li class="comments-list__empty">아직 코멘트가 없어요</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 토스트 메시지 -->
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <script src="js/mood-board.js"></script>
+</body>
+</html>
